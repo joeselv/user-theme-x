@@ -42,10 +42,21 @@ class UserThemeX extends F.Mortal {
     #buildSources() {
         let theme = F.Source.new(() => this.#genThemeSyncer(), this.theme),
             shell = F.Source.new(() => this.#genShellSyncer(), this[K.SHELL]),
-            sheet = F.Source.new(() => this.#genSheetSyncer(), this[K.SHEET]),
-            light = F.Source.new(() => new F.DBusProxy('org.gnome.SettingsDaemon.Color', '/org/gnome/SettingsDaemon/Color', x => this.#onLightOn(x),
-                ['g-properties-changed', (x, p) => { if(p.lookup_value('NightLightActive', null)) this.#onLightOn(x); }]), true);
+            sheet = F.Source.new(() => this.#genSheetSyncer(), this[K.SHEET]);
+    
         this.$update = () => [sheet, theme, shell].forEach(x => x.hub?.sync());
+
+        let light = F.Source.new(() => {
+            const settings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
+            const update = () => {
+                const isDark = settings.get_string('color-scheme') === 'prefer-dark';
+                this.#onLightOn({ NightLightActive: isDark });
+            };
+            settings.connect('changed::color-scheme', update);
+            update();  // safe to call now, this.$update exists
+            return settings;
+        }, true);
+
         this.$src = F.Source.tie({theme, shell, sheet, light}, this);
     }
 
